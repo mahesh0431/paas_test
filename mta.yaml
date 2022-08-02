@@ -1,0 +1,126 @@
+_schema-version: "3.2"
+ID: multitenancyBlog
+version: 0.0.1
+modules:
+- name: multitenancyblog-approuter
+  type: approuter.nodejs
+  path: multitenancyblog-approuter
+  requires:
+  - name: multitenancyBlog_html_repo_runtime
+  - name: uaa_multitenancyBlog
+  - name: saas_registry_multitenancyBlog
+  - name: multitenancyBlog-destination-service
+    group: destinations
+    properties:
+      forwardAuthToken: true
+      name: ui5
+      url: https://ui5.sap.com
+  - name: portal_resources_multitenancyBlog
+  parameters:
+    disk-quota: 256M
+    memory: 256M
+    routes:
+        - route: ${subdomain}-${appname}.${default-domain}
+  properties:
+    TENANT_HOST_PATTERN: ^(.*).multitencmp.saptfe-demo.com
+    EXTERNAL_REVERSE_PROXY: true
+- name: multitenancyBlog_ui_deployer
+  type: com.sap.application.content
+  path: .
+  requires:
+  - name: multitenancyBlog_html_repo_host
+    parameters:
+      content-target: true
+  build-parameters:
+    build-result: resources
+    requires:
+    - artifacts:
+      - ui5demoapp.zip
+      name: ui5demoapp
+      target-path: resources/
+- name: ui5demoapp
+  type: html5
+  path: ui5demoapp
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+- name: flp
+  type: com.sap.application.content
+  path: flp
+  requires:
+  - name: portal_resources_multitenancyBlog
+    parameters:
+      config:
+        TENANT_HOST_PATTERN: ^(.*).multitencmp.saptfe-demo.com
+      content-target: true
+      service-key:
+        config:
+          content-endpoint: developer
+        name: content-deploy-key
+  - name: multitenancyBlog_html_repo_host
+  - name: multitenancyBlog_ui_deployer
+  - name: uaa_multitenancyBlog
+  - name: saas_registry_multitenancyBlog
+resources:
+- name: saas_registry_multitenancyBlog
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: saas-registry
+    service-plan: application
+    config:
+      xsappname: multitenancyblog
+      appUrls:
+        onSubscription: https://${subdomain}.saptfe-demo.com/callback/v1.0/tenants/{tenantId}
+        getDependencies: https://${subdomain}.multitencmp.saptfe-demo.com/callback/v1.0/dependencies
+      category: Multitenancy Apps
+      description: Multitenancy Apps
+      displayName: Multitenancy Apps
+      appName: ${appname}
+- name: multitenancyBlog_html_repo_runtime
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-plan: app-runtime
+- name: uaa_multitenancyBlog
+  type: org.cloudfoundry.managed-service
+  parameters:
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: multitenancyBlog-xsuaa-service
+    service-plan: application
+- name: multitenancyBlog_html_repo_host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-plan: app-host
+- name: multitenancyBlog-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: false
+      init_data:
+        instance:
+          destinations:
+          - Authentication: NoAuthentication
+            Name: ui5
+            ProxyType: Internet
+            Type: HTTP
+            URL: https://ui5.sap.com
+          existing_destinations_policy: update
+      version: 1.0.0
+    service: destination
+    service-name: multitenancyBlog-destination-service
+    service-plan: lite
+- name: portal_resources_multitenancyBlog
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: portal
+    service-plan: standard
+parameters:
+  deploy_mode: html5-repo
+  appname: multitenancyblog
+  subdomain: CI-AP20
